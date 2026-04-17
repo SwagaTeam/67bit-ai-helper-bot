@@ -1,12 +1,19 @@
 services:
   promassist-mcp:
-    build: .
+    build: ./promassist-mcp
     container_name: promassist-mcp
+    networks:
+      - prom-network
+    environment:
+      - FASTMCP_HOST=0.0.0.0
+      - FASTMCP_PORT=8000
+      - JIRA_TOKEN=твой_токен
+    ports:
+      - "8000:8000"
+    command: python main.py 
     volumes:
       - ./generated_docs:/app/generated_docs
     restart: unless-stopped
-    stdin_open: true
-    tty: true
 
   keycloak:
     image: quay.io/keycloak/keycloak:25.0.2
@@ -32,6 +39,8 @@ services:
     depends_on:
       - keycloak-db
     restart: unless-stopped
+    networks:
+      - prom-network
 
   keycloak-db:
     image: postgres:16-alpine
@@ -46,22 +55,31 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    container_name: ollama
     deploy:
       resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
         limits:
           memory: 16G
-    container_name: ollama
     environment:
-      - OLLAMA_HOST=${OLLAMA_HOST:-0.0.0.0:11434}
+      - OLLAMA_HOST=0.0.0.0:11434
     volumes:
       - ollama-data:/root/.ollama
     ports:
       - "11434:11434"
     restart: unless-stopped
+    networks:
+      - prom-network
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:latest
     container_name: open-webui
+    networks:
+      - prom-network
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - ENABLE_OAUTH_SIGNUP=${ENABLE_OAUTH_SIGNUP:-true}
@@ -71,7 +89,7 @@ services:
       - OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL:-http://host.docker.internal:8081/realms/openwebui/.well-known/openid-configuration}
       - ENABLE_OAUTH=${ENABLE_OAUTH:-true}
       - OAUTH_MERGE_ACCOUNTS_BY_EMAIL=${OAUTH_MERGE_ACCOUNTS_BY_EMAIL:-true}
-      - ENABLE_LOGIN_FORM=false
+      - ENABLE_LOGIN_FORM=true
     # Добавляем host-gateway, чтобы host.docker.internal гарантированно работал в Linux
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -89,3 +107,7 @@ volumes:
   open-webui-data:
   keycloak-data:
   keycloak-db-data:
+
+networks:
+  prom-network:
+    driver: bridge
