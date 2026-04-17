@@ -1,0 +1,8 @@
+mcp[cli]
+python-docx
+weasyprint
+jinja2
+uvicorn
+starlette
+atlassian-python-api
+pydantic
